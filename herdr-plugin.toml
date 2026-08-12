@@ -1,0 +1,17 @@
+id = "herdr.vscode-tasks"
+name = "herdr-vscode-tasks"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+platforms = ["linux", "macos", "windows"]
+
+[[panes]]
+id = "picker"
+title = "Tasks"
+command = ["npx", "tsx", "src/index.ts"]
+placement = "popup"
+
+[[actions]]
+id = "open-picker"
+title = "open picker"
+contexts = ["workspace"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "herdr.vscode-tasks", "--entrypoint", "picker", "--placement", "popup", "--focus"]
