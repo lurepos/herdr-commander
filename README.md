@@ -12,7 +12,7 @@ herdr server reload-config
 
 ```toml
 [[keys.command]]
-key = "prefix+v"
+key = "f1"
 type = "plugin_action"
 command = "herdr.vscode-tasks.open-picker"
 description = "Abrir tareas de VS Code"
