@@ -25,6 +25,49 @@
 
 ---
 
+## Visual Overview
+
+### 1. Task Launcher & Autodiscovery
+```text
+┌ Herdr Commander: api-service (6/6) ────────────────────────────────────────────────────────┐
+│ Filter: Type to filter...                                                                  │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Commands ──────────────────────────────────────────────────────────────────────────────────┐
+│ ▶ [cargo] cargo: check                               · cargo check                         │
+│   [cargo] cargo: test                                · cargo test                          │
+│   [vscode] Verify project                            · composite: cargo: check, cargo: test│
+│   [npm] npm: build                                   · vite build                          │
+│   [npm] npm: lint                                    · biome check src                     │
+│   [make] make: docker-up                             · docker compose up -d                │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+ ↑↓/j/k move · Enter select · Esc/q quit
+```
+
+### 2. Flexible Pane Placement Selection
+```text
+┌ Placement for: cargo: check (4/4) ─────────────────────────────────────────────────────────┐
+│ Filter: Type to filter...                                                                  │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Commands ──────────────────────────────────────────────────────────────────────────────────┐
+│ ▶ [tab] Run in new tab                               · Create a dedicated Herdr tab        │
+│   [split] Run in right pane                          · Split workspace to the right        │
+│   [split] Run in bottom pane                         · Split workspace downwards           │
+│   [current] Current pane                             · Send and run in active pane         │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+ ↑↓/j/k move · Enter select · Esc back
+```
+
+### 3. Interactive Input Prompt (`promptString`)
+```text
+┌─ Input: Target Environment ──────────────────────────────┐
+│ Value: staging█                                          │
+│                                                          │
+│ Enter submit · Esc cancel                                │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Installation
 
 Install directly via the Herdr plugin manager:
