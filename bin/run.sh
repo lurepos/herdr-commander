@@ -2,7 +2,7 @@
 set -e
 
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="0.2.0"
+VERSION="0.2.1"
 REPOS="lurepos/herdr-commander lurepos/herdr-vscode-tasks"
 BIN_NAME="herdr-commander"
 

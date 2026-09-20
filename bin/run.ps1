@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $PluginDir = Split-Path -Parent $PSScriptRoot
-$Version = "0.2.0"
+$Version = "0.2.1"
 $Repos = @("lurepos/herdr-commander", "lurepos/herdr-vscode-tasks")
 $BinName = "herdr-commander"
 

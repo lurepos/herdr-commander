@@ -1,6 +1,6 @@
 id = "herdr.commander"
 name = "herdr-commander"
-version = "0.2.0"
+version = "0.2.1"
 min_herdr_version = "0.7.0"
 description = "Universal task runner and command palette for Herdr"
 platforms = ["linux", "macos", "windows"]
