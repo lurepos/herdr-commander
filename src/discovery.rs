@@ -167,3 +167,31 @@ pub fn create_default_tasks_json(workspace_cwd: &Path) -> Result<PathBuf, String
         .map_err(|e| format!("Failed to write {}: {e}", tasks_file.display()))?;
     Ok(tasks_file)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_retro_search_finds_root_workspace() {
+        let temp_base = std::env::temp_dir().join(format!("herdr_test_{}", std::process::id()));
+        let root = temp_base.join("workspace_root");
+        let subfolder = root.join("apps").join("backend-laravel");
+        fs::create_dir_all(&subfolder).unwrap();
+
+        let vscode_dir = root.join(".vscode");
+        fs::create_dir_all(&vscode_dir).unwrap();
+        let tasks_file = vscode_dir.join("tasks.json");
+        fs::write(&tasks_file, r#"{"version":"2.0.0","tasks":[]}"#).unwrap();
+
+        let (found_ws, found_file) = find_tasks_file(&subfolder).expect("Must find tasks file");
+        assert_eq!(found_ws, root);
+        assert_eq!(found_file, tasks_file);
+
+        let (ws, config) = discover_all_tasks(&subfolder);
+        assert_eq!(ws, root);
+        assert_eq!(config.workspace_cwd, root);
+
+        let _ = fs::remove_dir_all(&temp_base);
+    }
+}

@@ -337,7 +337,12 @@ pub fn execute_task_tree(
         }
 
         let task_cwd = if let Some(ref cwd) = task.cwd {
-            workspace_cwd.join(cwd)
+            let p = Path::new(cwd);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                workspace_cwd.join(p)
+            }
         } else {
             workspace_cwd.to_path_buf()
         };

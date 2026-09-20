@@ -60,6 +60,20 @@ pub struct Task {
 }
 
 impl Task {
+    pub fn resolve_variables(&mut self, workspace_folder: &Path, inputs: &HashMap<String, String>) {
+        if let Some(ref cmd) = self.command {
+            self.command = Some(resolve_variables(cmd, workspace_folder, inputs));
+        }
+        self.args = self
+            .args
+            .iter()
+            .map(|arg| resolve_variables(arg, workspace_folder, inputs))
+            .collect();
+        if let Some(ref cwd) = self.cwd {
+            self.cwd = Some(resolve_variables(cwd, workspace_folder, inputs));
+        }
+    }
+
     pub fn display_command(&self) -> String {
         if let Some(ref script) = self.script {
             format!("npm run {script}")
@@ -106,6 +120,15 @@ pub struct TaskConfig {
     pub tasks_path: Option<PathBuf>,
     pub tasks: Vec<Task>,
     pub inputs: Vec<TaskInput>,
+}
+
+impl TaskConfig {
+    pub fn resolve_variables(&mut self, inputs: &HashMap<String, String>) {
+        let ws = self.workspace_cwd.clone();
+        for task in &mut self.tasks {
+            task.resolve_variables(&ws, inputs);
+        }
+    }
 }
 
 pub fn strip_jsonc_comments(input: &str) -> String {
@@ -388,5 +411,46 @@ mod tests {
             &inputs,
         );
         assert_eq!(resolved, "/my/project/build/foo/prod");
+    }
+
+    #[test]
+    fn test_task_config_resolve_variables() {
+        let mut cfg = TaskConfig {
+            workspace_cwd: PathBuf::from("/repo"),
+            tasks_path: None,
+            tasks: vec![
+                Task {
+                    label: "Build".to_string(),
+                    task_type: None,
+                    source: TaskSource::VsCode,
+                    command: Some("npm run build".to_string()),
+                    args: vec![],
+                    script: None,
+                    cwd: Some("${workspaceFolder}/apps/web".to_string()),
+                    env: HashMap::new(),
+                    depends_on: vec![],
+                    depends_order: DependsOrder::Sequence,
+                    detail: None,
+                },
+                Task {
+                    label: "Test".to_string(),
+                    task_type: None,
+                    source: TaskSource::VsCode,
+                    command: Some("npm test".to_string()),
+                    args: vec![],
+                    script: None,
+                    cwd: Some("${workspaceFolder}/apps/backend".to_string()),
+                    env: HashMap::new(),
+                    depends_on: vec!["Build".to_string()],
+                    depends_order: DependsOrder::Sequence,
+                    detail: None,
+                },
+            ],
+            inputs: vec![],
+        };
+
+        cfg.resolve_variables(&HashMap::new());
+        assert_eq!(cfg.tasks[0].cwd.as_deref(), Some("/repo/apps/web"));
+        assert_eq!(cfg.tasks[1].cwd.as_deref(), Some("/repo/apps/backend"));
     }
 }

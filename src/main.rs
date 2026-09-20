@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reg_sig = registry.clone();
     ctrlc_handler(reg_sig);
 
-    let workspace_dir = resolve_workspace_dir(&client);
-    let (_ws, mut config) = discover_all_tasks(&workspace_dir);
+    let initial_dir = resolve_workspace_dir(&client);
+    let (mut workspace_dir, mut config) = discover_all_tasks(&initial_dir);
 
     // RAII Terminal initialization
     let mut guard = TerminalGuard::new()?;
@@ -68,8 +68,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match run_picker(&mut guard.terminal, "No tasks found in workspace", &empty_items, false)? {
             PickerResult::Selected("create_template") => {
-                let _ = create_default_tasks_json(&workspace_dir);
-                let (_, reloaded) = discover_all_tasks(&workspace_dir);
+                let _ = create_default_tasks_json(&initial_dir);
+                let (reloaded_ws, reloaded) = discover_all_tasks(&initial_dir);
+                workspace_dir = reloaded_ws;
                 config = reloaded;
             }
             _ => return Ok(()),
@@ -150,19 +151,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // Resolve variables in task
-        let mut final_task = selected_task.clone();
-        if let Some(ref cmd) = final_task.command {
-            final_task.command = Some(config::resolve_variables(cmd, &workspace_dir, &resolved_inputs));
-        }
-        final_task.args = final_task
-            .args
+        // Resolve variables across all tasks (including dependencies)
+        config.resolve_variables(&resolved_inputs);
+        let final_task = config
+            .tasks
             .iter()
-            .map(|arg| config::resolve_variables(arg, &workspace_dir, &resolved_inputs))
-            .collect();
-        if let Some(ref cwd) = final_task.cwd {
-            final_task.cwd = Some(config::resolve_variables(cwd, &workspace_dir, &resolved_inputs));
-        }
+            .find(|t| t.label == selected_task.label)
+            .cloned()
+            .unwrap_or(selected_task);
 
         // Drop TUI guard before running task to restore normal terminal
         drop(guard);
