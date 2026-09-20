@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $PluginDir = Split-Path -Parent $PSScriptRoot
 $Version = "0.2.0"
-$Repo = "lurepos/herdr-commander"
+$Repos = @("lurepos/herdr-commander", "lurepos/herdr-vscode-tasks")
 $BinName = "herdr-commander"
 
 $LocalRelease = Join-Path $PluginDir "target\release\$BinName.exe"
@@ -31,21 +31,23 @@ if (Test-Path $CachedBin) {
 
 # Download release
 $Target = "x86_64-pc-windows-msvc"
-$Url = "https://github.com/$Repo/releases/download/v$Version/$BinName-$Target.zip"
 $TmpZip = Join-Path $StateDir "$BinName.zip"
 
-try {
-    Invoke-WebRequest -Uri $Url -OutFile $TmpZip
-    Expand-Archive -Path $TmpZip -DestinationPath $StateDir -Force
-    Remove-Item $TmpZip -Force
-    $Extracted = Join-Path $StateDir "$BinName.exe"
-    if (Test-Path $Extracted) {
-        Move-Item -Path $Extracted -Destination $CachedBin -Force
-        & $CachedBin @args
-        exit $LASTEXITCODE
+foreach ($Repo in $Repos) {
+    $Url = "https://github.com/$Repo/releases/download/v$Version/$BinName-$Target.zip"
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $TmpZip -UseBasicParsing
+        Expand-Archive -Path $TmpZip -DestinationPath $StateDir -Force
+        Remove-Item $TmpZip -Force
+        $Extracted = Join-Path $StateDir "$BinName.exe"
+        if (Test-Path $Extracted) {
+            Move-Item -Path $Extracted -Destination $CachedBin -Force
+            & $CachedBin @args
+            exit $LASTEXITCODE
+        }
+    } catch {
+        # Continue to fallback repo
     }
-} catch {
-    # Download failed, fallback to cargo if installed
 }
 
 if (Get-Command cargo -ErrorAction SilentlyContinue) {

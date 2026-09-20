@@ -3,7 +3,7 @@ set -e
 
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="0.2.0"
-REPO="lurepos/herdr-commander"
+REPOS="lurepos/herdr-commander lurepos/herdr-vscode-tasks"
 BIN_NAME="herdr-commander"
 
 # 1. Local compiled binary (release or debug)
@@ -41,25 +41,28 @@ case "$OS" in
 esac
 
 if [ -n "$TARGET" ] && (command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1); then
-    URL="https://github.com/$REPO/releases/download/v$VERSION/${BIN_NAME}-$TARGET.tar.gz"
     TMP_ARCHIVE="$STATE_DIR/${BIN_NAME}-$TARGET.tar.gz"
-    
-    echo "Downloading herdr-commander ($TARGET)..." >&2
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$URL" -o "$TMP_ARCHIVE" 2>/dev/null || true
-    else
-        wget -q "$URL" -O "$TMP_ARCHIVE" 2>/dev/null || true
-    fi
 
-    if [ -f "$TMP_ARCHIVE" ] && [ -s "$TMP_ARCHIVE" ]; then
-        tar -xzf "$TMP_ARCHIVE" -C "$STATE_DIR" 2>/dev/null || true
-        rm -f "$TMP_ARCHIVE"
-        if [ -f "$STATE_DIR/$BIN_NAME" ]; then
-            mv -f "$STATE_DIR/$BIN_NAME" "$CACHED_BIN"
-            chmod +x "$CACHED_BIN"
-            exec "$CACHED_BIN" "$@"
+    for REPO in $REPOS; do
+        URL="https://github.com/$REPO/releases/download/v$VERSION/${BIN_NAME}-$TARGET.tar.gz"
+        echo "Attempting to download ${BIN_NAME} from $REPO ($TARGET)..." >&2
+
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$URL" -o "$TMP_ARCHIVE" 2>/dev/null || true
+        else
+            wget -q "$URL" -O "$TMP_ARCHIVE" 2>/dev/null || true
         fi
-    fi
+
+        if [ -f "$TMP_ARCHIVE" ] && [ -s "$TMP_ARCHIVE" ]; then
+            tar -xzf "$TMP_ARCHIVE" -C "$STATE_DIR" 2>/dev/null || true
+            rm -f "$TMP_ARCHIVE"
+            if [ -f "$STATE_DIR/$BIN_NAME" ]; then
+                mv -f "$STATE_DIR/$BIN_NAME" "$CACHED_BIN"
+                chmod +x "$CACHED_BIN"
+                exec "$CACHED_BIN" "$@"
+            fi
+        fi
+    done
 fi
 
 # 4. Fallback to building locally with cargo if available
@@ -72,5 +75,5 @@ if command -v cargo >/dev/null 2>&1; then
 fi
 
 echo "Error: Could not find or download herdr-commander executable." >&2
-echo "Please ensure cargo is installed or download the binary from https://github.com/$REPO/releases" >&2
+echo "Please ensure cargo is installed or download the binary from https://github.com/lurepos/herdr-commander/releases" >&2
 exit 1
