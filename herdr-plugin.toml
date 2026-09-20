@@ -1,17 +1,18 @@
-id = "herdr.vscode-tasks"
-name = "herdr-vscode-tasks"
-version = "0.1.0"
+id = "herdr.commander"
+name = "herdr-commander"
+version = "0.2.0"
 min_herdr_version = "0.7.0"
+description = "Universal task runner and command palette for Herdr"
 platforms = ["linux", "macos", "windows"]
 
 [[panes]]
 id = "picker"
-title = "Tasks"
-command = ["npx", "tsx", "src/index.ts"]
+title = "Commander"
+command = ["sh", "bin/run.sh"]
 placement = "popup"
 
 [[actions]]
 id = "open-picker"
-title = "open picker"
+title = "open commander"
 contexts = ["workspace"]
-command = ["herdr", "plugin", "pane", "open", "--plugin", "herdr.vscode-tasks", "--entrypoint", "picker", "--placement", "popup", "--focus"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "herdr.commander", "--entrypoint", "picker", "--placement", "popup", "--focus"]

@@ -1,0 +1,13 @@
+[package]
+name = "herdr-commander"
+version = "0.2.0"
+edition = "2021"
+authors = ["lurepos"]
+description = "Universal task runner and command palette for Herdr"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+libc = "0.2"

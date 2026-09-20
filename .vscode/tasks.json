@@ -2,76 +2,48 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "npm: install",
+      "label": "cargo: check",
       "type": "shell",
-      "command": "npm install",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "npm: lint",
-      "type": "shell",
-      "command": "npm run lint",
-      "problemMatcher": [],
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared",
-        "clear": true
-      }
-    },
-    {
-      "label": "TypeScript: check",
-      "type": "shell",
-      "command": "npm exec -- tsc --noEmit",
-      "problemMatcher": "$tsc",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared",
-        "clear": true
-      }
-    },
-    {
-      "label": "npm: test",
-      "type": "shell",
-      "command": "npm test",
-      "problemMatcher": [],
-      "group": "test",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared",
-        "clear": true
-      }
-    },
-    {
-      "label": "npm: check",
-      "type": "shell",
-      "command": "npm run check",
-      "problemMatcher": "$tsc",
+      "command": "cargo check",
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "presentation": {
         "reveal": "always",
-        "panel": "shared",
-        "clear": true
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "cargo: test",
+      "type": "shell",
+      "command": "cargo test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "cargo: build --release",
+      "type": "shell",
+      "command": "cargo build --release",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
       }
     },
     {
       "label": "Verify project",
       "dependsOn": [
-        "npm: check",
-        "npm: test"
+        "cargo: check",
+        "cargo: test"
       ],
       "dependsOrder": "parallel",
-      "problemMatcher": [],
       "group": "build"
     }
   ]
