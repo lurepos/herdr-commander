@@ -1,6 +1,6 @@
 use std::io::{self, stdout, Stdout};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
 
@@ -61,6 +61,7 @@ pub fn run_picker<T: Clone>(
 ) -> io::Result<PickerResult<T>> {
     let mut query = String::new();
     let mut selected_index = 0;
+    let mut list_state = ListState::default();
 
     loop {
         let filtered: Vec<&PickerItem<T>> = items
@@ -78,11 +79,22 @@ pub fn run_picker<T: Clone>(
             selected_index = filtered.len() - 1;
         }
 
+        // Keep the selected item in view: ratatui adjusts the list offset from
+        // the state's selection, so this must persist across frames.
+        if filtered.is_empty() {
+            list_state.select(None);
+        } else {
+            list_state.select(Some(selected_index));
+        }
+
         terminal.draw(|f| {
-            render_picker(f, title, &query, &filtered, selected_index, can_back);
+            render_picker(f, title, &query, &filtered, items.len(), selected_index, can_back, &mut list_state);
         })?;
 
         if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Release {
+                continue;
+            }
             match (key.code, key.modifiers) {
                 (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Char('q'), KeyModifiers::NONE) => {
                     return Ok(PickerResult::Quit);
@@ -134,8 +146,10 @@ fn render_picker<T>(
     title: &str,
     query: &str,
     items: &[&PickerItem<T>],
+    total: usize,
     selected_index: usize,
     can_back: bool,
+    state: &mut ListState,
 ) {
     let size = f.area();
     let chunks = Layout::default()
@@ -155,7 +169,7 @@ fn render_picker<T>(
         Span::styled(query, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     };
 
-    let search_title = format!(" {title} ({}/{}) ", items.len(), items.len());
+    let search_title = format!(" {title} ({}/{}) ", items.len(), total);
     let search_box = Paragraph::new(Line::from(vec![
         Span::styled("Filter: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         filter_text,
@@ -226,7 +240,7 @@ fn render_picker<T>(
                 .bg(Color::Rgb(30, 40, 60))
                 .add_modifier(Modifier::BOLD),
         );
-    f.render_widget(list_widget, chunks[1]);
+    f.render_stateful_widget(list_widget, chunks[1], state);
 
     // Footer instructions
     let back_hint = if can_back { " · Esc back" } else { " · Esc/q quit" };
@@ -349,4 +363,74 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+
+    fn picker_items(count: u32) -> Vec<PickerItem<u32>> {
+        (0..count)
+            .map(|i| PickerItem {
+                value: i,
+                label: format!("task {i}"),
+                detail: None,
+                badge: None,
+                searchable: format!("task {i}"),
+            })
+            .collect()
+    }
+
+    fn render_at(items: &[PickerItem<u32>], selected: usize) -> String {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let refs: Vec<&PickerItem<u32>> = items.iter().collect();
+        let mut state = ListState::default();
+        if !items.is_empty() {
+            state.select(Some(selected));
+        }
+        terminal
+            .draw(|f| {
+                render_picker(f, "t", "", &refs, items.len(), selected, false, &mut state);
+            })
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
+    }
+
+    #[test]
+    fn list_scrolls_to_keep_selection_visible() {
+        let items = picker_items(23);
+        // An 80x24 popup shows ~16 rows; selecting item 20 must scroll the
+        // window so the selection stays on screen.
+        let text = render_at(&items, 20);
+        assert!(
+            text.contains("task 20"),
+            "selected item should be visible after scrolling"
+        );
+        assert!(
+            !text.contains("task 0"),
+            "list window should have scrolled past the first items"
+        );
+    }
+
+    #[test]
+    fn list_renders_from_top_without_scrolling() {
+        let items = picker_items(23);
+        let text = render_at(&items, 0);
+        assert!(text.contains("task 0"));
+    }
+
+    #[test]
+    fn empty_filter_shows_message_without_selection() {
+        let items = picker_items(0);
+        let text = render_at(&items, 0);
+        assert!(text.contains("No matching tasks found"));
+    }
 }
