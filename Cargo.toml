@@ -1,6 +1,6 @@
 [package]
 name = "herdr-commander"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["lurepos"]
 description = "Universal task runner and command palette for Herdr"
