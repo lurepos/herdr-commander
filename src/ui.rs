@@ -1,6 +1,9 @@
 use std::io::{self, stdout, Stdout};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+        KeyModifiers, MouseButton, MouseEventKind,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -24,7 +27,7 @@ impl TerminalGuard {
     pub fn new() -> io::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = stdout();
-        execute!(stdout, EnterAlternateScreen)?;
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
         Ok(Self { terminal })
@@ -34,7 +37,11 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
+        let _ = execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        );
         let _ = self.terminal.show_cursor();
     }
 }
@@ -87,33 +94,69 @@ pub fn run_picker<T: Clone>(
             list_state.select(Some(selected_index));
         }
 
+        let mut list_area = Rect::default();
         terminal.draw(|f| {
-            render_picker(f, title, &query, &filtered, items.len(), selected_index, can_back, &mut list_state);
+            list_area = render_picker(f, title, &query, &filtered, items.len(), selected_index, can_back, &mut list_state);
         })?;
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Release {
-                continue;
+        match event::read()? {
+            Event::Key(key) if key.kind != KeyEventKind::Release => {
+                match (key.code, key.modifiers) {
+                    (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Char('q'), KeyModifiers::NONE) => {
+                        return Ok(PickerResult::Quit);
+                    }
+                    (KeyCode::Esc, _) => {
+                        return Ok(if can_back {
+                            PickerResult::Back
+                        } else {
+                            PickerResult::Quit
+                        });
+                    }
+                    (KeyCode::Up, _) | (KeyCode::Char('k'), KeyModifiers::NONE) if query.is_empty() || key.code == KeyCode::Up => {
+                        if selected_index > 0 {
+                            selected_index -= 1;
+                        } else if !filtered.is_empty() {
+                            selected_index = filtered.len() - 1;
+                        }
+                    }
+                    (KeyCode::Down, _) | (KeyCode::Char('j'), KeyModifiers::NONE) if query.is_empty() || key.code == KeyCode::Down => {
+                        if !filtered.is_empty() {
+                            if selected_index + 1 < filtered.len() {
+                                selected_index += 1;
+                            } else {
+                                selected_index = 0;
+                            }
+                        }
+                    }
+                    (KeyCode::Enter, _) => {
+                        if let Some(chosen) = filtered.get(selected_index) {
+                            return Ok(PickerResult::Selected(chosen.value.clone()));
+                        }
+                    }
+                    (KeyCode::Backspace, _) => {
+                        query.pop();
+                        selected_index = 0;
+                    }
+                    (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                        query.push(c);
+                        selected_index = 0;
+                    }
+                    _ => {}
+                }
             }
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Char('q'), KeyModifiers::NONE) => {
-                    return Ok(PickerResult::Quit);
-                }
-                (KeyCode::Esc, _) => {
-                    return Ok(if can_back {
-                        PickerResult::Back
-                    } else {
-                        PickerResult::Quit
-                    });
-                }
-                (KeyCode::Up, _) | (KeyCode::Char('k'), KeyModifiers::NONE) if query.is_empty() || key.code == KeyCode::Up => {
-                    if selected_index > 0 {
-                        selected_index -= 1;
-                    } else if !filtered.is_empty() {
-                        selected_index = filtered.len() - 1;
+            Event::Mouse(mouse) => match mouse.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if let Some(idx) = hit_test(
+                        list_area,
+                        list_state.offset(),
+                        mouse.column,
+                        mouse.row,
+                        filtered.len(),
+                    ) {
+                        return Ok(PickerResult::Selected(filtered[idx].value.clone()));
                     }
                 }
-                (KeyCode::Down, _) | (KeyCode::Char('j'), KeyModifiers::NONE) if query.is_empty() || key.code == KeyCode::Down => {
+                MouseEventKind::ScrollDown => {
                     if !filtered.is_empty() {
                         if selected_index + 1 < filtered.len() {
                             selected_index += 1;
@@ -122,22 +165,46 @@ pub fn run_picker<T: Clone>(
                         }
                     }
                 }
-                (KeyCode::Enter, _) => {
-                    if let Some(chosen) = filtered.get(selected_index) {
-                        return Ok(PickerResult::Selected(chosen.value.clone()));
+                MouseEventKind::ScrollUp => {
+                    if !filtered.is_empty() {
+                        if selected_index > 0 {
+                            selected_index -= 1;
+                        } else {
+                            selected_index = filtered.len() - 1;
+                        }
                     }
                 }
-                (KeyCode::Backspace, _) => {
-                    query.pop();
-                    selected_index = 0;
-                }
-                (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                    query.push(c);
-                    selected_index = 0;
-                }
                 _ => {}
-            }
+            },
+            _ => {}
         }
+    }
+}
+
+/// Resolve a screen coordinate to the index of a visible list row, accounting
+/// for the list's inner area and the first visible (scrolled) item.
+fn hit_test(
+    list_area: Rect,
+    offset: usize,
+    column: u16,
+    row: u16,
+    len: usize,
+) -> Option<usize> {
+    if list_area.width == 0 || list_area.height == 0 {
+        return None;
+    }
+    let inside = column >= list_area.x
+        && column < list_area.x.saturating_add(list_area.width)
+        && row >= list_area.y
+        && row < list_area.y.saturating_add(list_area.height);
+    if !inside {
+        return None;
+    }
+    let idx = offset + (row - list_area.y) as usize;
+    if idx < len {
+        Some(idx)
+    } else {
+        None
     }
 }
 
@@ -150,7 +217,7 @@ fn render_picker<T>(
     selected_index: usize,
     can_back: bool,
     state: &mut ListState,
-) {
+) -> Rect {
     let size = f.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -233,8 +300,10 @@ fn render_picker<T>(
             .collect()
     };
 
+    let list_block = Block::default().borders(Borders::ALL).title(" Commands ");
+    let list_inner = list_block.inner(chunks[1]);
     let list_widget = List::new(list_items)
-        .block(Block::default().borders(Borders::ALL).title(" Commands "))
+        .block(list_block)
         .highlight_style(
             Style::default()
                 .bg(Color::Rgb(30, 40, 60))
@@ -244,9 +313,11 @@ fn render_picker<T>(
 
     // Footer instructions
     let back_hint = if can_back { " · Esc back" } else { " · Esc/q quit" };
-    let footer_text = format!("↑↓/j/k move · Enter select{back_hint}");
+    let footer_text = format!("↑↓/j/k move · Enter/click select · scroll{back_hint}");
     let footer = Paragraph::new(Span::styled(footer_text, Style::default().fg(Color::DarkGray)));
     f.render_widget(footer, chunks[2]);
+
+    list_inner
 }
 
 pub fn prompt_string(
@@ -432,5 +503,27 @@ mod tests {
         let items = picker_items(0);
         let text = render_at(&items, 0);
         assert!(text.contains("No matching tasks found"));
+    }
+
+    #[test]
+    fn hit_test_maps_click_to_visible_row() {
+        let area = Rect::new(2, 5, 40, 10);
+        // First visible row when not scrolled.
+        assert_eq!(hit_test(area, 0, 5, 5, 4), Some(0));
+        assert_eq!(hit_test(area, 0, 5, 7, 4), Some(2));
+        // Scrolling shifts the window: screen row 5 is item 3.
+        assert_eq!(hit_test(area, 3, 5, 5, 4), Some(3));
+        // A row past the filtered items resolves to nothing.
+        assert_eq!(hit_test(area, 3, 5, 6, 4), None);
+    }
+
+    #[test]
+    fn hit_test_ignores_clicks_outside_list() {
+        let area = Rect::new(2, 5, 40, 10);
+        // Border column and below the last item.
+        assert_eq!(hit_test(area, 0, 1, 5, 4), None);
+        assert_eq!(hit_test(area, 0, 5, 4, 4), None);
+        assert_eq!(hit_test(area, 0, 5, 15, 4), None);
+        assert_eq!(hit_test(Rect::new(0, 0, 0, 0), 0, 0, 0, 4), None);
     }
 }
