@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
@@ -71,6 +71,9 @@ impl Task {
             .collect();
         if let Some(ref cwd) = self.cwd {
             self.cwd = Some(resolve_variables(cwd, workspace_folder, inputs));
+        }
+        for v in self.env.values_mut() {
+            *v = resolve_variables(v, workspace_folder, inputs);
         }
     }
 
@@ -377,6 +380,51 @@ pub fn resolve_variables(
     result
 }
 
+fn collect_input_refs(value: &str, out: &mut HashSet<String>) {
+    let mut rest = value;
+    while let Some(pos) = rest.find("${input:") {
+        let after = &rest[pos + 8..];
+        match after.find('}') {
+            Some(end) => {
+                out.insert(after[..end].to_string());
+                rest = &after[end + 1..];
+            }
+            None => break,
+        }
+    }
+}
+
+/// Input ids referenced by `root_label` and its transitive `depends_on` tree.
+pub fn referenced_input_ids(root_label: &str, tasks: &[Task]) -> HashSet<String> {
+    let map: HashMap<&str, &Task> = tasks.iter().map(|t| (t.label.as_str(), t)).collect();
+    let mut ids = HashSet::new();
+    let mut seen = HashSet::new();
+    let mut stack = vec![root_label];
+    while let Some(label) = stack.pop() {
+        if !seen.insert(label) {
+            continue;
+        }
+        if let Some(t) = map.get(label) {
+            if let Some(c) = t.command.as_deref() {
+                collect_input_refs(c, &mut ids);
+            }
+            for a in &t.args {
+                collect_input_refs(a, &mut ids);
+            }
+            if let Some(c) = t.cwd.as_deref() {
+                collect_input_refs(c, &mut ids);
+            }
+            for v in t.env.values() {
+                collect_input_refs(v, &mut ids);
+            }
+            for d in &t.depends_on {
+                stack.push(d.as_str());
+            }
+        }
+    }
+    ids
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -452,5 +500,63 @@ mod tests {
         cfg.resolve_variables(&HashMap::new());
         assert_eq!(cfg.tasks[0].cwd.as_deref(), Some("/repo/apps/web"));
         assert_eq!(cfg.tasks[1].cwd.as_deref(), Some("/repo/apps/backend"));
+    }
+
+    #[test]
+    fn test_resolve_variables_in_env() {
+        std::env::set_var("HERDR_TEST_JH", "/usr/lib/jvm");
+        let mut env = HashMap::new();
+        env.insert("E2E_MODEL".to_string(), "${input:model}".to_string());
+        env.insert("JAVA_HOME".to_string(), "${env:HERDR_TEST_JH}".to_string());
+        let mut cfg = TaskConfig {
+            workspace_cwd: PathBuf::from("/repo"),
+            tasks_path: None,
+            tasks: vec![Task {
+                label: "E2E".to_string(),
+                task_type: None,
+                source: TaskSource::VsCode,
+                command: Some("pnpm exec e2e run".to_string()),
+                args: vec![],
+                script: None,
+                cwd: None,
+                env,
+                depends_on: vec![],
+                depends_order: DependsOrder::Sequence,
+                detail: None,
+            }],
+            inputs: vec![],
+        };
+        let mut inputs = HashMap::new();
+        inputs.insert("model".to_string(), "ag/gemini-3.8-flash".to_string());
+        cfg.resolve_variables(&inputs);
+        assert_eq!(cfg.tasks[0].env["E2E_MODEL"], "ag/gemini-3.8-flash");
+        assert_eq!(cfg.tasks[0].env["JAVA_HOME"], "/usr/lib/jvm");
+    }
+
+    #[test]
+    fn test_referenced_input_ids_walks_dependencies() {
+        let mut env = HashMap::new();
+        env.insert("E2E_MODEL".to_string(), "${input:model}".to_string());
+        let mk = |label: &str, deps: Vec<&str>| Task {
+            label: label.to_string(),
+            task_type: None,
+            source: TaskSource::VsCode,
+            command: Some("echo".to_string()),
+            args: vec![],
+            script: None,
+            cwd: None,
+            env: if label == "E2E" { env.clone() } else { HashMap::new() },
+            depends_on: deps.iter().map(|s| s.to_string()).collect(),
+            depends_order: DependsOrder::Sequence,
+            detail: None,
+        };
+        let tasks = vec![
+            mk("E2E", vec!["ADB"]),
+            mk("ADB", vec![]),
+            mk("Unrelated", vec![]),
+        ];
+        let ids = referenced_input_ids("E2E", &tasks);
+        assert!(ids.contains("model"));
+        assert_eq!(ids.len(), 1);
     }
 }

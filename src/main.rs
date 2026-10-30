@@ -8,7 +8,7 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use config::{InputType, Task};
+use config::{referenced_input_ids, InputType, Task};
 use discovery::{create_default_tasks_json, discover_all_tasks};
 use runner::{execute_task_tree, HerdrClient, ProcessRegistry};
 use ui::{
@@ -115,9 +115,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             PickerResult::Quit => return Ok(()),
         };
 
-        // Resolve inputs if any
+        // Resolve inputs, but only those referenced by this task's dependency tree
+        let needed_inputs = referenced_input_ids(&selected_task.label, &config.tasks);
         let mut resolved_inputs = HashMap::new();
-        for input in &config.inputs {
+        for input in config.inputs.iter().filter(|i| needed_inputs.contains(&i.id)) {
             match input.input_type {
                 InputType::PromptString => {
                     if let Some(val) = prompt_string(&mut guard.terminal, input)? {
