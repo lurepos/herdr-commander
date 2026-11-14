@@ -95,15 +95,25 @@ pub fn discover_all_tasks(start_dir: &Path) -> (PathBuf, TaskConfig) {
     let makefile_path = ws.join("Makefile");
     if makefile_path.is_file() {
         if let Ok(content) = fs::read_to_string(&makefile_path) {
+            let mut seen_targets = HashSet::new();
             for line in content.lines() {
+                // Recipe lines (tab-indented) are commands, not targets; a
+                // colon inside them (db:seed, 3000:80) must not create a task.
+                if line.starts_with('\t') {
+                    continue;
+                }
                 // Look for targets like `build:` or `test: dep`
                 if let Some((target, _)) = line.split_once(':') {
                     let trimmed = target.trim();
+                    // `VAR:=value` / `VAR?=value` are assignments, not targets.
+                    let after_colon_is_assign = line[(trimmed.len() + 1)..].starts_with('=');
                     if !trimmed.is_empty()
+                        && !after_colon_is_assign
                         && !trimmed.starts_with('.')
                         && !trimmed.starts_with('#')
                         && !trimmed.contains('=')
                         && !trimmed.contains('%')
+                        && seen_targets.insert(trimmed.to_string())
                     {
                         let label = format!("make: {trimmed}");
                         if !existing_labels.contains(&label) {
@@ -193,5 +203,20 @@ mod tests {
         assert_eq!(config.workspace_cwd, root);
 
         let _ = fs::remove_dir_all(&temp_base);
+    }
+
+    #[test]
+    fn test_makefile_skips_recipes_and_assignments() {
+        let temp = std::env::temp_dir().join(format!("herdr_make_{}", std::process::id()));
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(
+            temp.join("Makefile"),
+            ".PHONY: build test\nbuild: deps\n\t@echo foo: bar\ndeps:\nVAR:=1\nB?=/usr/bin\ndup:\n\ttrue\ndup:\n\ttrue2\n",
+        )
+        .unwrap();
+        let (_, config) = discover_all_tasks(&temp);
+        let labels: Vec<String> = config.tasks.iter().filter(|t| t.source == TaskSource::Make).map(|t| t.label.clone()).collect();
+        assert_eq!(labels, vec!["make: build", "make: deps", "make: dup"]);
+        let _ = fs::remove_dir_all(&temp);
     }
 }
