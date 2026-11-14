@@ -4,3 +4,6 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
+gpui-kit.d.ts
+jsconfig.json
+demo/platform/target/
