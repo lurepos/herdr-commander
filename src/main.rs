@@ -5,16 +5,38 @@ mod ui;
 
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use config::{referenced_input_ids, InputType, Task};
+use config::{referenced_input_ids, DependsOrder, InputType, Task};
 use discovery::{create_default_tasks_json, discover_all_tasks};
 use runner::{execute_task_tree, HerdrClient, ProcessRegistry};
 use ui::{
     placement_picker_items, prompt_string, run_picker, task_to_picker_item,
     PickerItem, PickerResult, TerminalGuard,
 };
+
+/// Hidden parity hook: dump the discovered task list as JSON and exit, so the
+/// GUI mod's discovery can be diffed against the TUI's in CI.
+fn dump_tasks(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let (ws, config) = discover_all_tasks(dir);
+    let out = serde_json::json!({
+        "workspace": ws,
+        "tasks": config.tasks.iter().map(|t| serde_json::json!({
+            "label": t.label,
+            "source": t.source.to_string(),
+            "command": t.command,
+            "args": t.args,
+            "script": t.script,
+            "detail": t.detail,
+            "cwd": t.cwd,
+            "depends_on": t.depends_on,
+            "depends_order": if t.depends_order == DependsOrder::Parallel { "parallel" } else { "sequence" },
+        })).collect::<Vec<_>>(),
+    });
+    println!("{out}");
+    Ok(())
+}
 
 fn resolve_workspace_dir(client: &HerdrClient) -> PathBuf {
     if let Ok(cwd) = env::var("HERDR_WORKSPACE_CWD") {
@@ -34,6 +56,10 @@ fn resolve_workspace_dir(client: &HerdrClient) -> PathBuf {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let argv: Vec<String> = env::args().collect();
+    if argv.len() == 3 && argv[1] == "--dump-tasks" {
+        return dump_tasks(Path::new(&argv[2]));
+    }
     let client = Arc::new(HerdrClient::new());
     let registry = Arc::new(ProcessRegistry::new());
 
