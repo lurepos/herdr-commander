@@ -1,0 +1,9 @@
+{
+  "name": "platform",
+  "private": true,
+  "workspaces": ["apps/web"],
+  "scripts": {
+    "dev": "vite apps/web",
+    "lint": "biome check apps services"
+  }
+}

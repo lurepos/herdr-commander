@@ -1,0 +1,42 @@
+{
+  // Orders API — workspace tasks (herdr-commander demo, TUI flavor)
+  // JSONC: comments and trailing commas are supported by both engines.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // pickString: the palette asks before running; dependsOn runs first
+      "label": "Deploy to environment",
+      "type": "shell",
+      "command": "sh",
+      "args": ["scripts/deploy.sh", "${input:target_env}"],
+      "options": {
+        "cwd": "scripts",
+        "env": { "DEPLOY_REF": "origin/main", "VAULT_ADDR": "${env:VAULT_ADDR}" }
+      },
+      "detail": "zero-downtime deploy (asks for target)",
+    },
+    {
+      // promptString with a default, resolved into an arg
+      "label": "Migrate database",
+      "type": "shell",
+      "command": "php",
+      "args": ["artisan", "migrate", "--path=${input:migration}"],
+      "detail": "database/migrations/<name>",
+    },
+  ],
+  "inputs": [
+    {
+      "id": "target_env",
+      "type": "pickString",
+      "description": "Deploy target",
+      "options": ["staging", "canary", "production"],
+      "default": "staging",
+    },
+    {
+      "id": "migration",
+      "type": "promptString",
+      "description": "Migration file name",
+      "default": "2026_01_01_000000_create_orders_table",
+    },
+  ],
+}

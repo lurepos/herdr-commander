@@ -1,0 +1,38 @@
+{
+  // Platform — full-stack monorepo tasks (herdr-commander demo, GUI flavor)
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // composite over generated tasks from other sources (cargo, npm)
+      "label": "Verify project",
+      "dependsOn": ["cargo: clippy", "npm: lint"],
+      "detail": "worker lint + web lint in one go",
+    },
+    {
+      // two inputs in one task: promptString + pickString
+      "label": "E2E: checkout flow",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:e2e", "--", "--project=${input:browser}", "--grep", "checkout"],
+      "options": {
+        "env": { "BASE_URL": "https://${input:shop_url}.staging.platform.dev" }
+      },
+      "detail": "playwright, headed on CI runner",
+    },
+  ],
+  "inputs": [
+    {
+      "id": "browser",
+      "type": "pickString",
+      "description": "Browser engine",
+      "options": ["chromium", "firefox", "webkit"],
+      "default": "chromium",
+    },
+    {
+      "id": "shop_url",
+      "type": "promptString",
+      "description": "Shop slug (staging subdomain)",
+      "default": "acme",
+    },
+  ],
+}

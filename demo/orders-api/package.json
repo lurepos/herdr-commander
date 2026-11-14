@@ -1,0 +1,8 @@
+{
+  "name": "orders-api",
+  "private": true,
+  "description": "Orders API (herdr-commander demo, TUI flavor) — node only drives front assets",
+  "scripts": {
+    "build:assets": "esbuild resources/js/app.js --bundle --outdir=public/build --minify"
+  }
+}
