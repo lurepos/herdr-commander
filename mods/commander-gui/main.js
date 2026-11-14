@@ -66,6 +66,9 @@ export default class Commander extends View {
       cx.notify();
     });
     this.input.on("submit", (_e, cx) => this.activate(this.pickable()[this.at], cx));
+    // The popup mounts after init: focus now, retry once the overlay has the keyboard.
+    this.input.focus();
+    cx.timer.after(600, () => this.input.focus());
     this.discover(cx);
   }
 
