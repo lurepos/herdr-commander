@@ -232,8 +232,11 @@ export default class Commander extends View {
       const env = await readEnv(this.machine, envNamesFor([task, ...taskDeps(task, this.tasks)]));
       const line = composeCommandLine(task, this.tasks, this.inputValues, env);
       if (!line) return;
+      // The wrapper follows where the line runs, not where the app renders:
+      // a space on a machine (a WSL distro, an ssh host) runs POSIX core, so
+      // sh; PowerShell only for a local Windows space (no machine).
       const wrap =
-        appWindow().platform === "windows"
+        !this.machine && appWindow().platform === "windows"
           ? ["powershell", "-NoProfile", "-Command", line]
           : ["sh", "-lc", line];
       const f = focused();
@@ -407,7 +410,7 @@ export default class Commander extends View {
                           .text_color(r === sel ? t.foreground : t.muted)
                           .child(r.label),
                       )
-                      .when(!!r.detail, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).truncate().child(r.detail))),
+                      .when(!!r.detail, (el) => el.child(div().flex_none().max_w_2_5().text_size(11).text_color(t.dim).truncate().child(r.detail))),
                   ),
                 );
 
