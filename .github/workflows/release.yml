@@ -41,4 +41,5 @@ jobs:
           bin: herdr-commander
           target: ${{ matrix.target }}
           archive: herdr-commander-$target
+          checksum: sha256
           token: ${{ secrets.GITHUB_TOKEN }}
