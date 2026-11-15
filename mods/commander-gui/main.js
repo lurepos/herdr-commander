@@ -237,11 +237,16 @@ export default class Commander extends View {
       if (!line) return;
       // The wrapper follows where the line runs, not where the app renders:
       // a space on a machine (a WSL distro, an ssh host) runs POSIX core, so
-      // sh; PowerShell only for a local Windows space (no machine).
+      // a bash login shell; PowerShell only for a local Windows space (no
+      // machine). The login shell matters: pane.split/tab.new run argv with
+      // the core's captured environment (no login profile), so on WSL/ssh the
+      // bare `sh -lc` PATH misses ~/.local/bin, node, cargo — task binaries
+      // die with 127. `-i` keeps an interactive shell open after the task
+      // exits, matching what a bare tab keeps.
       const wrap =
         !this.machine && appWindow().platform === "windows"
           ? ["powershell", "-NoProfile", "-Command", line]
-          : ["sh", "-lc", line];
+          : ["bash", "-lic", `${line}; exec bash -i`];
       const f = focused();
       if (placement === "tab") run("tab.new", { argv: wrap, name: task.label });
       else if (placement === "right") run("pane.split", { direction: "right", argv: wrap });
